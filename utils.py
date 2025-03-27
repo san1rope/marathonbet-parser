@@ -3,7 +3,6 @@ import os
 import asyncio
 import multiprocessing
 import traceback
-from random import randint
 from typing import List, Union, Any
 
 from undetected_chromedriver import ChromeOptions, Chrome
