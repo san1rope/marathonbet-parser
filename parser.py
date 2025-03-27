@@ -39,14 +39,14 @@ async def start_parser(page_start: int):
         page_url = f"https://www.marathonbet.com/su/betting/Football?page={1}"
         async with session.get(url=page_url, **request_default_kwargs) as response:
             soup_page = BeautifulSoup(await response.text(), "lxml")
-            logger.info(f"Сделал запрос к странице: {page_url}")
+            logger.info(f"{proxy} | Сделал запрос к странице: {page_url}")
 
         events_on_page = soup_page.find_all(class_="event-grid")
         for event in events_on_page:
             event_url = f"https://www.marathonbet.com" + event.find(class_="member-link").get("href")
             async with session.get(url=event_url, **request_default_kwargs) as response:
                 soup_event = BeautifulSoup(await response.text(), "lxml")
-                logger.info(f"Сделал запрос к ивенту: {event_url}")
+                logger.info(f"{proxy} | Сделал запрос к ивенту: {event_url}")
 
             totals_common = await Ut.get_table_values(soup_obj=soup_event, class_main="MATCH_TOTALS_SEVERAL_-")
             totals_first_team = await Ut.get_table_values(soup_obj=soup_event, class_main="MATCH_TOTAL_FIRST_TEAM_")

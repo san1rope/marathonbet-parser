@@ -15,15 +15,12 @@ async def main():
     logger.info("Запускаю софт...")
 
     load_proxies = await Ut.load_proxy_from_file()
-    # with (ProcessPoolExecutor(max_workers=Config.MAX_BROWSERS) as executor):
-    #     futures = [executor.submit(Ut.wrapper, Ut.verify_browser, proxy) for proxy in load_proxies]
-    #     for future in futures:
-    #         result = future.result()
-    #         if result:
-    #             PROXIES.append(result)
-
-    for proxy in load_proxies:
-        PROXIES.append([proxy, "abcd"])
+    with (ProcessPoolExecutor(max_workers=Config.MAX_BROWSERS) as executor):
+        futures = [executor.submit(Ut.wrapper, Ut.verify_browser, proxy) for proxy in load_proxies]
+        for future in futures:
+            result = future.result()
+            if result:
+                PROXIES.append(result)
 
     tasks = [asyncio.create_task(start_parser(page_start=i)) for i in range(1, Config.MAX_ASYNC_THREADS + 1)]
     await asyncio.gather(*tasks)
