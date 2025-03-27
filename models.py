@@ -18,7 +18,7 @@ class Proxy(BaseModel):
         return Proxy(host=host, port=port, username=username, password=password)
 
     async def create_proxy_extension(self):
-        path = os.path.abspath("proxy-extensions\\" + await self.formulate_filename())
+        path = os.path.abspath("proxy-extensions/" + await self.formulate_filename())
         try:
             os.mkdir(path)
 
