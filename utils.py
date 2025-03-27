@@ -1,10 +1,12 @@
 import logging
 import os
+import re
 import asyncio
 import multiprocessing
 import traceback
 from typing import List, Union, Any
 
+from bs4 import BeautifulSoup
 from undetected_chromedriver import ChromeOptions, Chrome
 
 from config import Config
@@ -55,7 +57,7 @@ class Utils:
             options.add_argument("--no-sandbox")
 
         try:
-            driver = Chrome(options=options, use_subprocess=True, user_multi_procs=True, no_sandbox=False)
+            driver = Chrome(options=options)
 
         except FileExistsError:
             print(traceback.format_exc())
@@ -79,3 +81,40 @@ class Utils:
         else:
             driver.quit()
             return False
+
+    @staticmethod
+    async def get_table_values(soup_obj: BeautifulSoup, class_main: str):
+        totals_list = soup_obj.find("div", {"data-preference-id": re.compile(class_main)}).find_all(
+            "tr", {"data-mutable-id": re.compile("MG")})
+        totals_values = {}
+        flag = False
+        for total_pair in totals_list[1:]:
+            te = total_pair.find_all(class_=re.compile("coeff-link-2way"))
+            if len(te) == 0:
+                if flag:
+                    odd_and_even_values = total_pair.find_all("span")
+                    odd_value = odd_and_even_values[0].text.strip()
+                    even_value = odd_and_even_values[1].text.strip()
+                    totals_values.update({
+                        totals_list.index(total_pair): {"odd": odd_value, "even": even_value}
+                    })
+
+                else:
+                    odd_el = total_pair.find("th", {"data-mutable-id": re.compile("ODD_Total_Goals")})
+                    if odd_el:
+                        flag = True
+
+                continue
+
+            coeff_less_value = te[0].find(class_="coeff-value").text.strip()
+            coeff_less_price = te[0].find(class_="coeff-price").text.strip()
+            coeff_more_value = te[1].find(class_="coeff-value").text.strip()
+            coeff_more_price = te[1].find(class_="coeff-price").text.strip()
+            totals_values.update({
+                totals_list.index(total_pair): {
+                    "less": coeff_less_value + " " + coeff_less_price,
+                    "more": coeff_more_value + " " + coeff_more_price
+                }
+            })
+
+        return totals_values

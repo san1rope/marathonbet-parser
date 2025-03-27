@@ -56,7 +56,7 @@ async def get_data_from_pages(cookies_data: Tuple[List], page_start: int, step: 
 
                 # totals
                 totals_list = soup_event.find("div", {"data-preference-id": re.compile("MATCH_TOTALS_SEVERAL_-")}
-                                              ).find_all("tr", {"data-mutable-id": re.compile("MG1_-")})
+                                              ).find_all("tr", {"data-mutable-id": re.compile("MG")})
                 totals_values = {}
                 flag = False
                 for total_pair in totals_list[1:]:

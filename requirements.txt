@@ -1,0 +1,7 @@
+aiohttp~=3.11.14
+bs4~=0.0.2
+beautifulsoup4~=4.13.3
+undetected-chromedriver~=3.5.5
+python-dotenv~=1.1.0
+pydantic~=2.10.6
+lxml~=5.3.1
