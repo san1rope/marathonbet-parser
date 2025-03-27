@@ -41,6 +41,8 @@ class Utils:
 
     @staticmethod
     async def verify_browser(proxy: Proxy, retries: int = 3) -> Union[List, bool]:
+        print("VERIFY BROWSER")
+
         current_process = multiprocessing.current_process().name == 'MainProcess'
         if not current_process:
             logging.basicConfig(

@@ -21,7 +21,7 @@ async def main():
             result = future.result()
             if result:
                 PROXIES.append(result)
-
+    
     tasks = [asyncio.create_task(start_parser(page_start=i)) for i in range(1, Config.MAX_ASYNC_THREADS + 1)]
     await asyncio.gather(*tasks)
 
