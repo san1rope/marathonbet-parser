@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -6,15 +7,29 @@ from pydantic import BaseModel
 class Proxy(BaseModel):
     host: str
     port: int
-    username: str
-    password: str
+    username: Optional[str] = None
+    password: Optional[str] = None
 
     async def formulate_filename(self) -> str:
-        return f"{self.host}_{self.port}_{self.username}_{self.password}"
+        name = f"{self.host}_{self.port}"
+        if self.username is not None:
+            name += f"_{self.username}_{self.password}"
+
+        return name
 
     @staticmethod
     async def get_proxy_obj(proxy: str):
-        host, port, username, password = proxy.split(":")
+        proxy_list = proxy.split(":")
+        if len(proxy_list) == 2:
+            host, port = proxy_list
+            username, password = None, None
+
+        elif len(proxy_list) == 4:
+            host, port, username, password = proxy_list
+
+        else:
+            return
+
         return Proxy(host=host, port=port, username=username, password=password)
 
     async def create_proxy_extension(self):

@@ -11,6 +11,7 @@ from config import Config, PROXIES
 from models import Proxy
 from parser import start_parser
 from utils import Utils as Ut, Utils
+from proxy_verify import proxy_verify_process
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,6 @@ logger = logging.getLogger(__name__)
 async def main():
     logging.basicConfig(
         level=logging.INFO, format=u'%(filename)s:%(lineno)d #%(levelname)-8s [%(asctime)s] - %(name)s - %(message)s')
-    logging.getLogger("WDM").setLevel(logging.CRITICAL)
     logger.info("Запускаю софт...")
 
     load_proxies = await Ut.load_proxy_from_file()
@@ -29,15 +29,16 @@ async def main():
             if result:
                 PROXIES.append(result)
 
-    queue_proxy = Queue()
+    queue_proxy_verify = Queue()
     queue_football = Queue()
     queue_tennis = Queue()
 
     proxies_for_process = int(len(PROXIES) / 2)
+    Process(target=Ut.wrapper, args=(proxy_verify_process, queue_proxy_verify,))
     Process(target=Ut.wrapper, args=(start_parser, PROXIES[:proxies_for_process], Ut.FOOTBALL, queue_football,
-                                     queue_proxy,)).start()
+                                     queue_proxy_verify,)).start()
     Process(target=Ut.wrapper, args=(start_parser, PROXIES[proxies_for_process:], Ut.TENNIS, queue_tennis,
-                                     queue_proxy,)).start()
+                                     queue_proxy_verify,)).start()
 
     football_leagues_urls = None
     tennis_leagues_urls = None
@@ -73,7 +74,7 @@ async def main():
 
             proxy = Proxy(**msg["proxy"])
             proxy_ip = f"http://{proxy.host}:{proxy.port}"
-            proxy_auth = BasicAuth(login=proxy.username, password=proxy.password)
+            proxy_auth = BasicAuth(login=proxy.username, password=proxy.password) if proxy.username else None
             async with session.get(url="https://www.marathonbet.com/en/live/", headers=msg["headers"], proxy=proxy_ip,
                                    proxy_auth=proxy_auth, timeout=20) as response:
                 markup = await response.text()

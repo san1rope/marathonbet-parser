@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+import time
 
 from aiohttp import BasicAuth, ClientSession
 from bs4 import BeautifulSoup
@@ -82,5 +83,15 @@ async def main():
                 print(out_data)
 
 
+async def main2():
+    options = ChromeOptions()
+    options.add_argument(f"--proxy-server=s-22494.sp6.ovh:11001")
+
+    with Chrome(options=options) as driver:
+        driver.get("https://2ip.ua")
+
+        time.sleep(2000)
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main2())

@@ -1,3 +1,4 @@
+import json
 import logging
 import asyncio
 from asyncio import Semaphore
@@ -53,7 +54,7 @@ async def start_parser(proxies: List, game_name: str, queue: Queue, queue_proxy:
     proxy, cookie = await Ut.get_next_proxy(current_proxy_index=current_proxy_index)
 
     proxy_ip = f"http://{proxy.host}:{proxy.port}"
-    proxy_auth = BasicAuth(login=proxy.username, password=proxy.password)
+    proxy_auth = BasicAuth(login=proxy.username, password=proxy.password) if proxy.username else None
     headers = {
         "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
         "accept-encoding": "gzip, deflate, br, zstd",
@@ -107,3 +108,25 @@ async def start_parser(proxies: List, game_name: str, queue: Queue, queue_proxy:
         ) for urls in distribut_urls]
         result = await asyncio.gather(*tasks)
         print(result)
+
+        if game_name == Ut.FOOTBALL:
+            path_obj = Config.FILEPATH_VERIFIED_PROXIES_FOOTBALL
+
+        elif game_name == Ut.TENNIS:
+            path_obj = Config.FILEPATH_VERIFIED_PROXIES_TENNIS
+
+        else:
+            continue
+
+        try:
+            with path_obj.open("r", encoding="utf-8") as file:
+                verified_proxies = json.load(file)
+
+        except FileNotFoundError:
+            verified_proxies = {}
+
+        for proxy, cookie in verified_proxies.items():
+            PROXIES.append([proxy, cookie])
+
+        with path_obj.open("w", encoding="utf-8") as file:
+            json.dump({}, file, indent=4, ensure_ascii=False)

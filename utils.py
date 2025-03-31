@@ -76,7 +76,13 @@ class Utils:
 
         options = ChromeOptions()
         options.add_argument(f"--user-agent={Config.USER_AGENT}")
-        options.add_argument(f'--load-extension={os.getcwd()}/proxy-extensions/{proxy_filename}/')
+
+        if proxy.username is None:
+            options.add_argument(f"--proxy-server={proxy.host}:{proxy.port}")
+
+        else:
+            options.add_argument(f'--load-extension={os.getcwd()}/proxy-extensions/{proxy_filename}/')
+
         if Config.HEADLESS:
             options.add_argument("--headless")
             options.add_argument("--no-sandbox")
@@ -197,6 +203,9 @@ class Utils:
 
         except AttributeError:
             logger.error("Ошибка при парсинге!")
+            with open("index.html", "w", encoding="utf-8") as file:
+                file.write(str(soup))
+
             return None
 
         match_name = soup.find(class_=re.compile("coupon-row")).get("data-event-name")
@@ -241,7 +250,20 @@ class Utils:
     async def parse_data_from_event_tennis(cls, soup: [BeautifulSoup, PageElement]):
         match_data = {}
 
-        event_id = soup.find(class_=re.compile("coupon-row")).get("data-event-eventid")
+        try:
+            event_id = soup.find(class_=re.compile("coupon-row")).get("data-event-eventid")
+            if not event_id:
+                event_id = soup.get("data-event-eventid")
+
+            match_data["event_id"] = event_id
+
+        except AttributeError:
+            logger.error("Ошибка при парсинге!")
+            with open("index.html", "w", encoding="utf-8") as file:
+                file.write(str(soup))
+
+            return None
+
         match_data["event_id"] = event_id
 
         match_name = soup.find(class_=re.compile("coupon-row")).get("data-event-name")
@@ -250,7 +272,6 @@ class Utils:
 
         win_handicap_for_sets = await cls.get_table_values(soup_obj=soup, class_main="MATCH_HANDICAP_BETTING_SET_")
         win_handicap_for_games = await cls.get_table_values(soup_obj=soup, class_main="MATCH_HANDICAP_BETTING_GAME_")
-        win_handicap_for_games_1_set = await cls.get_table_values(soup_obj=soup, class_main="SET_HANDICAP1_")
         win_handicap_for_games_1_set = await cls.get_table_values(soup_obj=soup, class_main="SET_HANDICAP1_")
 
         totals_sets = await cls.get_table_values(soup_obj=soup, class_main="MATCH_TOTALS_SETS_")
