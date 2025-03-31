@@ -1,23 +1,21 @@
 import logging
-import asyncio
-import re
-import os
-from multiprocessing import Queue
-from typing import Dict, List, Tuple
+import time
 
-from aiohttp import BasicAuth, ClientSession
+from aiohttp import ClientSession, BasicAuth
 from bs4 import BeautifulSoup
 
-from config import Config
-from models import Proxy
+from config import PROXIES, current_proxy_index, Config
 from utils import Utils as Ut
 
 logger = logging.getLogger(__name__)
 
 
-async def get_data_from_pages(cookies_data: Tuple[List], page_start: int, step: int):
-    current_proxy_id = 0
-    proxy, cookie = cookies_data[current_proxy_id]
+async def start_parser(page_start: int):
+    global current_proxy_index
+    proxy, cookie = PROXIES[current_proxy_index]
+    current_proxy_index += 1
+
+    out_data = []
 
     proxy_ip = f"http://{proxy.host}:{proxy.port}"
     proxy_auth = BasicAuth(login=proxy.username, password=proxy.password)
@@ -40,84 +38,52 @@ async def get_data_from_pages(cookies_data: Tuple[List], page_start: int, step: 
     }
     request_default_kwargs = {"headers": headers, "proxy": proxy_ip, "proxy_auth": proxy_auth, "timeout": 20}
     session = ClientSession()
-
-    for page in range(page_start, 100, step):
+    for page in range(page_start, 100, Config.MAX_ASYNC_THREADS):
         page_url = f"https://www.marathonbet.com/su/betting/Football?page={page}"
         async with session.get(url=page_url, **request_default_kwargs) as response:
-            soup_page = BeautifulSoup(await response.text(), "lxml")
-            logger.info(f"Сделал запрос к странице: {page_url}")
+            page_markup = await response.text()
+            soup_page = BeautifulSoup(page_markup, "lxml")
+            logger.info(f"{proxy} | Сделал запрос к странице: {page_url}")
 
         events_on_page = soup_page.find_all(class_="event-grid")
+        if not events_on_page:
+            if soup_page.find(class_="event-menu"):
+                break
+
+            else:
+                pass  # re-auth. in progress...
+
         for event in events_on_page:
             event_url = f"https://www.marathonbet.com" + event.find(class_="member-link").get("href")
             async with session.get(url=event_url, **request_default_kwargs) as response:
-                soup_event = BeautifulSoup(await response.text(), "lxml")
-                logger.info(f"Сделал запрос к ивенту: {event_url}")
+                event_markup = await response.text()
+                soup_event = BeautifulSoup(event_markup, "lxml")
+                logger.info(f"{proxy} | Сделал запрос к ивенту: {event_url}")
 
-                # totals
-                totals_list = soup_event.find("div", {"data-preference-id": re.compile("MATCH_TOTALS_SEVERAL_-")}
-                                              ).find_all("tr", {"data-mutable-id": re.compile("MG")})
-                totals_values = {}
-                flag = False
-                for total_pair in totals_list[1:]:
-                    te = total_pair.find_all(class_=re.compile("coeff-link-2way"))
-                    if len(te) == 0:
-                        if flag:
-                            odd_and_even_values = total_pair.find_all("span")
-                            odd_value = odd_and_even_values[0].text.strip()
-                            even_value = odd_and_even_values[1].text.strip()
+            totals_common = await Ut.get_table_values(soup_obj=soup_event, class_main="MATCH_TOTALS_SEVERAL_-")
+            totals_first_team = await Ut.get_table_values(soup_obj=soup_event, class_main="MATCH_TOTAL_FIRST_TEAM_")
+            totals_first_team_1_time = await Ut.get_table_values(
+                soup_obj=soup_event, class_main="MATCH_TOTAL_FIRST_TEAM_1_")
+            totals_first_team_2_time = await Ut.get_table_values(
+                soup_obj=soup_event, class_main="MATCH_TOTAL_FIRST_TEAM_2_")
+            totals_second_team = await Ut.get_table_values(soup_obj=soup_event, class_main="MATCH_TOTAL_SECOND_TEAM_")
+            totals_second_team_1_time = await Ut.get_table_values(
+                soup_obj=soup_event, class_main="MATCH_TOTAL_SECOND_TEAM_1_")
+            totals_second_team_2_time = await Ut.get_table_values(
+                soup_obj=soup_event, class_main="MATCH_TOTAL_SECOND_TEAM_2_")
+            totals_2_time = await Ut.get_table_values(soup_obj=soup_event, class_main="TOTALS_WITH_ODDEVEN2_")
 
-                            totals_values.update({
-                                totals_list.index(total_pair): {"odd": odd_value, "even": even_value}
-                            })
+            fore_win = await Ut.get_table_values(
+                soup_obj=soup_event, class_main="MATCH_HANDICAP_BETTING_COUPONE_DEPENDED_")
+            fore_win_1_time = await Ut.get_table_values(
+                soup_obj=soup_event, class_main="FIRST_HALF_MATCH_HANDICAP_BETTING_")
+            fore_win_2_time = await Ut.get_table_values(
+                soup_obj=soup_event, class_main="SECOND_HALF_MATCH_HANDICAP_BETTING_")
 
-                        else:
-                            odd_el = total_pair.find("th", {"data-mutable-id": re.compile("ODD_Total_Goals")})
-                            if odd_el:
-                                flag = True
+            out_data.append([
+                totals_common, totals_first_team, totals_first_team_1_time, totals_first_team_2_time,
+                totals_second_team, totals_second_team_1_time, totals_second_team_2_time, totals_2_time, fore_win,
+                fore_win_1_time, fore_win_2_time
+            ])
 
-                        continue
-
-                    coeff_less_value = te[0].find(class_="coeff-value").text.strip()
-                    coeff_less_price = te[0].find(class_="coeff-price").text.strip()
-                    coeff_more_value = te[1].find(class_="coeff-value").text.strip()
-                    coeff_more_price = te[1].find(class_="coeff-price").text.strip()
-
-                    totals_values.update({
-                        totals_list.index(total_pair): {
-                            "less": coeff_less_value + " " + coeff_less_price,
-                            "more": coeff_more_value + " " + coeff_more_price
-                        }
-                    })
-                    print(f"totals_values = {totals_values}")
-
-
-async def new_task(cookies_pairs: Tuple[Dict[Proxy, str]]):
-    logging.basicConfig(
-        level=logging.INFO, format=u'%(filename)s:%(lineno)d #%(levelname)-8s [%(asctime)s] - %(name)s - %(message)s')
-    logger.info(f"Задача запущена!")
-
-    # proxy_ip = f"http://{proxy.host}:{proxy.port}"
-    # proxy_auth = BasicAuth(login=proxy.username, password=proxy.password)
-    #
-    # url = "https://www.marathonbet.com/su/betting/Football?page="
-    # headers = {
-    #     "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-    #     "accept-encoding": "gzip, deflate, br, zstd",
-    #     "accept-language": "uk-UA,uk;q=0.9,en-US;q=0.8,en;q=0.7",
-    #     "cookie": f"cf_clearance={cookie}",
-    #     "priority": "u=0, i",
-    #     "referer": "https://www.marathonbet.com/su/?cppcids=all",
-    #     "sec-ch-ua": '"Not A(Brand";v="8", "Chromium";v="132", "Opera GX";v="117"',
-    #     "sec-ch-ua-mobile": '?0',
-    #     "sec-ch-ua-platform": '"Windows"',
-    #     "sec-fetch-dest": 'document',
-    #     "sec-fetch-mode": 'navigate',
-    #     "sec-fetch-site": "same-origin",
-    #     "sec-fetch-user": "?1",
-    #     "upgrade-insecure-requests": "1",
-    #     "user-agent": Config.USER_AGENT
-    # }
-    #
-    # request_default_kwargs = {"headers": headers, "proxy": proxy_ip, "proxy_auth": proxy_auth, "timeout": 20}
-    # session = ClientSession()
+    return out_data

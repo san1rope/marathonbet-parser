@@ -1,9 +1,6 @@
 import os
-from typing import List, Dict
 
 from dotenv import load_dotenv
-
-from models import Proxy
 
 load_dotenv()
 

@@ -2,8 +2,8 @@ import asyncio
 import logging
 from concurrent.futures.process import ProcessPoolExecutor
 
-from config import Config
-from parser import new_task
+from config import Config, PROXIES
+from parser import start_parser
 from utils import Utils as Ut
 
 logger = logging.getLogger(__name__)
@@ -14,28 +14,16 @@ async def main():
         level=logging.INFO, format=u'%(filename)s:%(lineno)d #%(levelname)-8s [%(asctime)s] - %(name)s - %(message)s')
     logger.info("Запускаю софт...")
 
-    proxies = await Ut.load_proxy_from_file()
-    cookies_pairs = []
-    with (ProcessPoolExecutor(max_workers=Config.MAX_PROCESSES) as executor):
-        futures = [executor.submit(Ut.wrapper, Ut.verify_browser, proxy) for proxy in proxies]
+    load_proxies = await Ut.load_proxy_from_file()
+    with (ProcessPoolExecutor(max_workers=Config.MAX_BROWSERS) as executor):
+        futures = [executor.submit(Ut.wrapper, Ut.verify_browser, proxy) for proxy in load_proxies]
         for future in futures:
             result = future.result()
             if result:
-                cookies_pairs.append(future.result())
-
-        futures.clear()
-        proxies_on_process = int(len(cookies_pairs) / Config.MAX_PROCESSES)
-
-        start_index = 0
-        while True:
-            end_index = start_index + proxies_on_process
-            new_future = executor.submit(Ut.wrapper, new_task, tuple(cookies_pairs[start_index:end_index]))
-            futures.append(new_future)
-
-            if end_index >= len(cookies_pairs):
-                break
-
-            start_index = end_index
+                PROXIES.append(result)
+    
+    tasks = [asyncio.create_task(start_parser(page_start=i)) for i in range(1, Config.MAX_ASYNC_THREADS + 1)]
+    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":

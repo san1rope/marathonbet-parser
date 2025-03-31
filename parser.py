@@ -1,18 +1,56 @@
 import logging
+import asyncio
+from asyncio import Semaphore
+from queue import Empty
+from typing import List, Dict
+from multiprocessing import Queue
 
-from aiohttp import ClientSession, BasicAuth
+from aiohttp import BasicAuth, ClientSession
 from bs4 import BeautifulSoup
 
-from config import PROXIES, current_proxy_index, Config
-from utils import Utils as Ut
+from config import PROXIES, Config
+from utils import Utils as Ut, current_proxy_index
 
 logger = logging.getLogger(__name__)
 
 
-async def start_parser(page_start: int):
-    global current_proxy_index
-    proxy, cookie = PROXIES[current_proxy_index]
-    current_proxy_index += 1
+async def parse_leagues(session: ClientSession, request_default_kwargs: Dict, leagues_urls: List[str], parse_method):
+    for league_url in leagues_urls:
+        async with session.get(url=league_url, **request_default_kwargs) as response:
+            markup_league = await response.text()
+            soup_league = BeautifulSoup(markup_league, "lxml")
+
+        events_elements = soup_league.find_all("div", class_="coupon-row")
+        if len(events_elements) == 1:
+            out_data = await parse_method(soup=events_elements[0])
+            print(out_data)
+
+            for event_el in events_elements:
+                event_url = f"https://www.marathonbet.com/en/live/{event_el['data-event-treeid']}"
+                async with session.get(url=event_url, **request_default_kwargs) as response:
+                    event_markup = await response.text()
+                    soup_event = BeautifulSoup(event_markup, "lxml")
+
+                out_data = await parse_method(soup=soup_event)
+                print(out_data)
+
+
+async def start_parser(proxies: List, game_name: str, queue: Queue, queue_proxy: Queue):
+    logging.basicConfig(
+        level=logging.INFO, format=u'%(filename)s:%(lineno)d #%(levelname)-8s [%(asctime)s] - %(name)s - %(message)s')
+    logger.info(f"Запустил парсер по {game_name}")
+
+    if game_name == Ut.FOOTBALL:
+        parse_method = Ut().parse_data_from_event_football
+
+    elif game_name == Ut.TENNIS:
+        parse_method = Ut().parse_data_from_event_tennis
+
+    else:
+        return
+
+    PROXIES.extend(proxies)
+    proxy, cookie = await Ut.get_next_proxy(current_proxy_index=current_proxy_index)
 
     proxy_ip = f"http://{proxy.host}:{proxy.port}"
     proxy_auth = BasicAuth(login=proxy.username, password=proxy.password)
@@ -35,48 +73,37 @@ async def start_parser(page_start: int):
     }
     request_default_kwargs = {"headers": headers, "proxy": proxy_ip, "proxy_auth": proxy_auth, "timeout": 20}
     session = ClientSession()
-    for page in range(page_start, 100, Config.MAX_ASYNC_THREADS):
-        page_url = f"https://www.marathonbet.com/su/betting/Football?page={1}"
-        async with session.get(url=page_url, **request_default_kwargs) as response:
-            soup_page = BeautifulSoup(await response.text(), "lxml")
-            logger.info(f"{proxy} | Сделал запрос к странице: {page_url}")
+    while True:
+        queue.put({"type": "get_markup_live_page", "game_name": game_name, "proxy": proxy.dict(), "headers": headers})
+        await asyncio.sleep(0.5)
+        print("message has been sent")
 
-        events_on_page = soup_page.find_all(class_="event-grid")
-        for event in events_on_page:
-            event_url = f"https://www.marathonbet.com" + event.find(class_="member-link").get("href")
-            async with session.get(url=event_url, **request_default_kwargs) as response:
-                soup_event = BeautifulSoup(await response.text(), "lxml")
-                logger.info(f"{proxy} | Сделал запрос к ивенту: {event_url}")
+        leagues_urls = None
+        while True:
+            try:
+                msg = queue.get_nowait()
+                print(f"new_message parser = {msg}")
 
-            totals_common = await Ut.get_table_values(soup_obj=soup_event, class_main="MATCH_TOTALS_SEVERAL_-")
-            totals_first_team = await Ut.get_table_values(soup_obj=soup_event, class_main="MATCH_TOTAL_FIRST_TEAM_")
-            totals_first_team_1_time = await Ut.get_table_values(
-                soup_obj=soup_event, class_main="MATCH_TOTAL_FIRST_TEAM_1_")
-            totals_first_team_2_time = await Ut.get_table_values(
-                soup_obj=soup_event, class_main="MATCH_TOTAL_FIRST_TEAM_2_")
-            totals_second_team = await Ut.get_table_values(soup_obj=soup_event, class_main="MATCH_TOTAL_SECOND_TEAM_")
-            totals_second_team_1_time = await Ut.get_table_values(
-                soup_obj=soup_event, class_main="MATCH_TOTAL_SECOND_TEAM_1_")
-            totals_second_team_2_time = await Ut.get_table_values(
-                soup_obj=soup_event, class_main="MATCH_TOTAL_SECOND_TEAM_2_")
-            totals_2_time = await Ut.get_table_values(soup_obj=soup_event, class_main="TOTALS_WITH_ODDEVEN2_")
+            except Empty:
+                continue
 
-            fore_win = await Ut.get_table_values(
-                soup_obj=soup_event, class_main="MATCH_HANDICAP_BETTING_COUPONE_DEPENDED_")
-            fore_win_1_time = await Ut.get_table_values(
-                soup_obj=soup_event, class_main="FIRST_HALF_MATCH_HANDICAP_BETTING_")
-            fore_win_2_time = await Ut.get_table_values(
-                soup_obj=soup_event, class_main="SECOND_HALF_MATCH_HANDICAP_BETTING_")
+            if msg.get("type") == game_name:
+                leagues_urls = msg["value"]
+                break
 
-            print(f"common_totals = {totals_common}")
-            print(f"first_team_totals = {totals_first_team}")
-            print(f"totals_first_team_1_time = {totals_first_team_1_time}")
-            print(f"totals_first_team_2_time = {totals_first_team_2_time}")
-            print(f"second_team_totals = {totals_second_team}")
-            print(f"totals_second_team_1_time = {totals_second_team_1_time}")
-            print(f"totals_second_team_2_time = {totals_second_team_2_time}")
-            print(f"totals_2_time = {totals_2_time}")
-            print(f"----------------")
-            print(f"fore_win = {fore_win}")
-            print(f"fore_win_1_time = {fore_win_1_time}")
-            print(f"fore_win_2_time = {fore_win_2_time}")
+        distribut_urls = [[] for _ in range(Config.MAX_ASYNC_THREADS)]
+        dp_index = 0
+        for item in leagues_urls:
+            distribut_urls[dp_index].append(item)
+            dp_index += 1
+
+            if dp_index >= len(distribut_urls):
+                dp_index = 0
+
+        semaphore = Semaphore(Config.MAX_ASYNC_THREADS)
+        tasks = [Ut.worker(
+            semaphore=semaphore, func=parse_leagues, session=session, request_default_kwargs=request_default_kwargs,
+            leagues_urls=urls, parse_method=parse_method
+        ) for urls in distribut_urls]
+        result = await asyncio.gather(*tasks)
+        print(result)
