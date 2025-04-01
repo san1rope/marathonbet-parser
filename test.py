@@ -3,6 +3,7 @@ import logging
 import os
 
 from aiohttp import BasicAuth, ClientSession
+from aiohttp_socks import ProxyConnector
 from bs4 import BeautifulSoup
 from undetected_chromedriver import ChromeOptions, Chrome
 
@@ -82,15 +83,21 @@ async def main():
 
 
 async def main2():
-    options = ChromeOptions()
-    options.add_argument(f"--user-agent={Config.USER_AGENT}")
-    options.add_argument(f'--load-extension={os.getcwd()}/s-22494.sp6.ovh_11001_V4zH2d_0_hhNUPsJfpskT/')
-    options.add_argument("--disable-blink-features=AutomationControlled")
+    # proxy = Proxy(host="s-22804.sp6.ovh", port=11022, username="lored_21", password="7845129630Lored")
+    # await proxy.create_proxy_extension()
+    # print(await Ut.verify_browser(proxy=proxy))
 
-    with Chrome(options=options) as driver:
-        driver.get("https://www.marathonbet.com/su/live/popular")
+    url = "https://dayspedia.com/time/pl/Warsaw/?lang=ru"
 
-        await asyncio.sleep(2000)
+    proxy_ip = "http://s-22822.sp4.ovh:11005"
+    proxy_auth = BasicAuth(login="5X7xufFRWY_4", password="4qxm3WpKoSvy")
+
+    # proxy_url = "socks5://5X7xufFRWY_0:4qxm3WpKoSvy@s-22822.sp4.ovh:11001"
+    # connector = ProxyConnector.from_url(proxy_url)
+    async with ClientSession() as session:
+        async with session.get(url=url, timeout=20, proxy=proxy_ip, proxy_auth=proxy_auth) as response:
+            markup = await response.text()
+            print(markup)
 
 
 if __name__ == "__main__":
