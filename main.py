@@ -74,7 +74,7 @@ async def main():
 
             proxy = Proxy(**msg["proxy"])
             proxy_ip = f"http://{proxy.host}:{proxy.port}"
-            proxy_auth = BasicAuth(login=proxy.username, password=proxy.password) if proxy.username else None
+            proxy_auth = BasicAuth(login=proxy.username, password=proxy.password)
             async with session.get(url="https://www.marathonbet.com/en/live/", headers=msg["headers"], proxy=proxy_ip,
                                    proxy_auth=proxy_auth, timeout=20) as response:
                 markup = await response.text()

@@ -1,8 +1,6 @@
 import asyncio
 import logging
 import os
-import re
-import time
 
 from aiohttp import BasicAuth, ClientSession
 from bs4 import BeautifulSoup
@@ -10,7 +8,7 @@ from undetected_chromedriver import ChromeOptions, Chrome
 
 from config import Config
 from models import Proxy
-from utils import Utils as Ut, Utils
+from utils import Utils as Ut
 
 logger = logging.getLogger(__name__)
 
@@ -85,12 +83,14 @@ async def main():
 
 async def main2():
     options = ChromeOptions()
-    options.add_argument(f"--proxy-server=s-22494.sp6.ovh:11001")
+    options.add_argument(f"--user-agent={Config.USER_AGENT}")
+    options.add_argument(f'--load-extension={os.getcwd()}/s-22494.sp6.ovh_11001_V4zH2d_0_hhNUPsJfpskT/')
+    options.add_argument("--disable-blink-features=AutomationControlled")
 
     with Chrome(options=options) as driver:
-        driver.get("https://2ip.ua")
+        driver.get("https://www.marathonbet.com/su/live/popular")
 
-        time.sleep(2000)
+        await asyncio.sleep(2000)
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ from typing import List, Union, Any, Optional
 from bs4 import BeautifulSoup, PageElement
 from selenium.common import WebDriverException
 from undetected_chromedriver import ChromeOptions, Chrome
+from urllib3.exceptions import ReadTimeoutError
 from webdriver_manager.chrome import ChromeDriverManager
 
 from config import Config, PROXIES
@@ -96,9 +97,9 @@ class Utils:
             return False
 
         try:
-            driver.get("https://marathonbet.com/su/betting/Football+-+11")
+            driver.get("https://marathonbet.com/su/betting/Football")
 
-        except WebDriverException:
+        except (WebDriverException, ReadTimeoutError):
             return False
 
         await asyncio.sleep(30)

@@ -1,6 +1,7 @@
 import json
 import logging
 import asyncio
+from time import time
 from asyncio import Semaphore
 from queue import Empty
 from typing import List, Dict
@@ -54,7 +55,7 @@ async def start_parser(proxies: List, game_name: str, queue: Queue, queue_proxy:
     proxy, cookie = await Ut.get_next_proxy(current_proxy_index=current_proxy_index)
 
     proxy_ip = f"http://{proxy.host}:{proxy.port}"
-    proxy_auth = BasicAuth(login=proxy.username, password=proxy.password) if proxy.username else None
+    proxy_auth = BasicAuth(login=proxy.username, password=proxy.password)
     headers = {
         "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
         "accept-encoding": "gzip, deflate, br, zstd",
@@ -106,8 +107,10 @@ async def start_parser(proxies: List, game_name: str, queue: Queue, queue_proxy:
             semaphore=semaphore, func=parse_leagues, session=session, request_default_kwargs=request_default_kwargs,
             leagues_urls=urls, parse_method=parse_method
         ) for urls in distribut_urls]
+        start_time = time()
         result = await asyncio.gather(*tasks)
-        print(result)
+        result_time = time() - start_time
+        print(f"FINISH TIME: {result_time}")
 
         if game_name == Ut.FOOTBALL:
             path_obj = Config.FILEPATH_VERIFIED_PROXIES_FOOTBALL
